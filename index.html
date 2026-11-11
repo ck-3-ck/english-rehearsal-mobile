@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#edf0e8">
+  <meta name="description" content="在手机上逐句听英文讲稿，点词试听并查看美式音标。">
+  <title>英文逐句跟读</title>
+  <link rel="apple-touch-icon" href="touch-icon.png">
+  <link rel="stylesheet" href="style.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <div class="workspace">
+    <header class="topbar">
+      <div>
+        <h1>英文逐句跟读</h1>
+        <p id="scriptInfo" class="subtle">正在载入讲稿…</p>
+      </div>
+      <button id="openImport" class="button">换讲稿</button>
+    </header>
+
+    <main class="layout">
+      <section class="practice" aria-label="跟读控制">
+        <div class="reading">
+          <div class="reading-head">
+            <span id="position" class="position">当前句</span>
+            <button id="rangeMode" class="text-button" type="button" aria-pressed="false" disabled>选段</button>
+          </div>
+          <div id="sentence" class="sentence" lang="en"></div>
+          <p id="tip" class="reading-tip">轻点单词可听发音、看音标</p>
+          <div id="pronunciation" class="pronunciation" aria-live="polite" hidden>
+            <div id="ipaWord" class="ipa-word"></div>
+            <div id="ipaText" class="ipa-text"></div>
+          </div>
+        </div>
+
+        <div class="controls">
+          <div class="playbar">
+            <button id="play" class="button primary" disabled>
+              <span class="play-icon" aria-hidden="true"></span><span id="playLabel">听整句</span>
+            </button>
+            <button id="stop" class="button" disabled>停止</button>
+          </div>
+          <p id="status" class="status" role="status">准备就绪</p>
+
+          <div class="navigation">
+            <button id="previous" class="button" disabled>上一句</button>
+            <button id="next" class="button" disabled>下一句</button>
+          </div>
+
+          <fieldset class="speed">
+            <legend>语速</legend>
+            <div class="segments">
+              <label><input type="radio" name="speed" value="1" checked><span>原速</span></label>
+              <label><input type="radio" name="speed" value="0.8"><span>慢速</span></label>
+              <label><input type="radio" name="speed" value="0.6"><span>更慢</span></label>
+            </div>
+          </fieldset>
+
+          <details class="settings">
+            <summary>音色、复读和术语</summary>
+            <div class="settings-body">
+              <label class="field">英语音色
+                <select id="voice"><option value="">系统默认</option></select>
+              </label>
+              <div class="repeat-row">
+                <label><input id="repeat" type="checkbox"> 停顿后再读一遍</label>
+                <select id="delay" aria-label="跟读停顿" disabled>
+                  <option value="2">2 秒</option><option value="3" selected>3 秒</option>
+                  <option value="5">5 秒</option><option value="8">8 秒</option>
+                </select>
+              </div>
+              <label class="field">术语读法
+                <textarea id="terms" rows="3" spellcheck="false" aria-describedby="termsHelp"></textarea>
+              </label>
+              <p class="subtle" id="termsHelp">每行一个，例如 FPGA = F P G A</p>
+              <button id="saveTerms" class="button">保存术语</button>
+              <p id="termsStatus" class="subtle" role="status"></p>
+            </div>
+          </details>
+        </div>
+      </section>
+
+      <details id="outline" class="outline">
+        <summary>查看全部句子</summary>
+        <label class="search-label">
+          <span class="sr-only">搜索讲稿</span>
+          <input id="search" type="search" placeholder="搜索讲稿" autocomplete="off">
+        </label>
+        <ol id="sentenceList" class="sentence-list"></ol>
+      </details>
+    </main>
+  </div>
+
+  <dialog id="importDialog" aria-labelledby="importTitle">
+    <form id="importForm">
+      <h2 id="importTitle">换讲稿</h2>
+      <label class="field">粘贴英文讲稿
+        <textarea id="scriptInput" rows="8" spellcheck="false" placeholder="粘贴文本，或选择下方的 TXT 文件"></textarea>
+      </label>
+      <div class="file-row">
+        <label class="button file-button">选择 TXT<input id="scriptFile" type="file" accept=".txt,text/plain"></label>
+        <button id="resetScript" class="text-button" type="button">恢复示例稿</button>
+      </div>
+      <p id="importStatus" class="subtle" role="status"></p>
+      <div class="dialog-actions">
+        <button id="cancelImport" class="button" type="button">取消</button>
+        <button class="button primary" type="submit">使用讲稿</button>
+      </div>
+    </form>
+  </dialog>
+</body>
+</html>

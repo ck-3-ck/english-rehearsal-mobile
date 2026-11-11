@@ -1,0 +1,3 @@
+Good morning, everyone. Today I’ll walk you through a short example.
+
+This device processes data as it moves through the system. The accelerator uses an FPGA. Let’s look at the next slide.
