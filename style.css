@@ -92,6 +92,11 @@ h1, h2, p { margin: 0; }
 .pronunciation { border-top: 1px solid #bbd2c1; margin-top: 12px; padding-top: 10px; }
 .ipa-word { font-size: .84rem; font-weight: 700; color: var(--accent); overflow-wrap: anywhere; }
 .ipa-text { font-size: 1.12rem; margin-top: 3px; overflow-wrap: anywhere; }
+.translation { border-top: 1px solid #bbd2c1; margin-top: 11px; padding-top: 4px; }
+.translation-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 2px 8px; }
+.translation-actions .text-button { min-height: 44px; }
+.translation-actions .subtle { font-size: .75rem; }
+.translation-text { margin-top: 3px; font-size: .98rem; line-height: 1.65; overflow-wrap: anywhere; }
 .controls { padding: 13px 1px 0; }
 .playbar { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
 .playbar .primary { min-height: 48px; font-size: 1rem; }

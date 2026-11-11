@@ -250,9 +250,114 @@ function handleWord(index) {
   refreshRange();
 }
 
+const translateButton = byId("translate");
+const translationText = byId("translationText");
+const translations = new Map();
+let translationRequest = null;
+
+function resetTranslation(sentence) {
+  translationRequest?.abort();
+  translationRequest = null;
+  translateButton.disabled = !sentence;
+  translateButton.textContent = "看译文";
+  translateButton.setAttribute("aria-expanded", "false");
+  translationText.hidden = true;
+  translationText.textContent = "";
+}
+
+function translationChunks(sentence) {
+  const encoder = new TextEncoder();
+  const limit = 500;
+  if (encoder.encode(sentence).length <= limit) return [sentence];
+
+  const chunks = [];
+  let start = 0;
+  let end = 0;
+  let bytes = 0;
+  let boundary = 0;
+  while (end < sentence.length) {
+    const character = String.fromCodePoint(sentence.codePointAt(end));
+    const size = encoder.encode(character).length;
+    if (bytes + size > limit) {
+      const cut = boundary > start ? boundary : end;
+      chunks.push(sentence.slice(start, cut).trim());
+      start = end = cut;
+      bytes = 0;
+      continue;
+    }
+    end += character.length;
+    bytes += size;
+    if (/\s/u.test(character)) boundary = end;
+  }
+  chunks.push(sentence.slice(start).trim());
+  return chunks.filter(Boolean);
+}
+
+async function fetchTranslation(sentence, signal) {
+  const results = [];
+  for (const chunk of translationChunks(sentence)) {
+    const url = new URL("https://api.mymemory.translated.net/get");
+    url.searchParams.set("q", chunk);
+    url.searchParams.set("langpair", "en|zh-CN");
+    const response = await fetch(url, { signal, credentials: "omit", referrerPolicy: "no-referrer", cache: "no-store" });
+    const data = await response.json();
+    const translation = data.responseData?.translatedText?.trim();
+    if (response.status === 429 || Number(data.responseStatus) === 429) {
+      throw new Error("今日翻译额度已用完，请明天再试。");
+    }
+    if (!response.ok || Number(data.responseStatus) !== 200 || !translation) {
+      throw new Error("翻译服务暂时不可用，请重试。");
+    }
+    results.push(translation);
+  }
+  return results.join(" ");
+}
+
+async function showTranslation() {
+  const sentence = state.sentences[state.current];
+  if (!sentence) return;
+  if (!translationText.hidden && translations.has(sentence)) {
+    resetTranslation(sentence);
+    return;
+  }
+
+  translationText.hidden = false;
+  translateButton.setAttribute("aria-expanded", "true");
+  if (translations.has(sentence)) {
+    translationText.textContent = translations.get(sentence);
+    translateButton.textContent = "隐藏译文";
+    return;
+  }
+
+  const request = new AbortController();
+  translationRequest = request;
+  translateButton.disabled = true;
+  translationText.textContent = "正在翻译…";
+  const timeout = setTimeout(() => request.abort(), 15000);
+  try {
+    const translation = await fetchTranslation(sentence, request.signal);
+    if (translationRequest !== request) return;
+    translations.set(sentence, translation);
+    translationText.textContent = translation;
+    translateButton.textContent = "隐藏译文";
+  } catch (error) {
+    if (translationRequest !== request) return;
+    translationText.textContent = request.signal.aborted ? "翻译超时，请重试。" :
+      (error.message.startsWith("今日翻译额度") ? error.message : "暂时无法翻译，请检查网络后重试。");
+    translateButton.textContent = "重试翻译";
+  } finally {
+    clearTimeout(timeout);
+    if (translationRequest === request) {
+      translationRequest = null;
+      translateButton.disabled = false;
+    }
+  }
+}
+
 function renderSentence() {
   const sentence = state.sentences[state.current] || "";
   hideIpa();
+  resetTranslation(sentence);
   state.rangeMode = false;
   state.rangeStart = null;
   state.rangeEnd = null;
@@ -399,6 +504,7 @@ outline.open = !phoneLayout.matches;
 updateVoices();
 if (canSpeak) speech.addEventListener("voiceschanged", updateVoices);
 controls.play.addEventListener("click", playCurrent);
+translateButton.addEventListener("click", showTranslation);
 controls.stop.addEventListener("click", () => stopSpeech("已停止"));
 controls.previous.addEventListener("click", () => selectSentence(state.current - 1));
 controls.next.addEventListener("click", () => selectSentence(state.current + 1));

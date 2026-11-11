@@ -7,8 +7,8 @@
   <meta name="description" content="在手机上逐句听英文讲稿，点词试听并查看美式音标。">
   <title>英文逐句跟读</title>
   <link rel="apple-touch-icon" href="touch-icon.png">
-  <link rel="stylesheet" href="style.css">
-  <script src="app.js" defer></script>
+  <link rel="stylesheet" href="style.css?v=translation">
+  <script src="app.js?v=translation" defer></script>
 </head>
 <body>
   <div class="workspace">
@@ -32,6 +32,13 @@
           <div id="pronunciation" class="pronunciation" aria-live="polite" hidden>
             <div id="ipaWord" class="ipa-word"></div>
             <div id="ipaText" class="ipa-text"></div>
+          </div>
+          <div class="translation">
+            <div class="translation-actions">
+              <button id="translate" class="text-button" type="button" aria-controls="translationText" aria-expanded="false" disabled>看译文</button>
+              <span class="subtle">点按后发送当前句给 MyMemory</span>
+            </div>
+            <p id="translationText" class="translation-text" role="status" hidden></p>
           </div>
         </div>
 
