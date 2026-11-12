@@ -3,6 +3,7 @@
 const byId = id => document.getElementById(id);
 const localKeys = {
   manuscript: "rehearsal.manuscript",
+  position: "rehearsal.position",
   settings: "rehearsal.settings",
   wordClicks: "rehearsal.wordClicks",
   translationPrefix: "rehearsal.translation.en-zh-CN:"
@@ -478,6 +479,7 @@ function saveSentenceEdit(event) {
     name: state.scriptName,
     sentenceRanges: state.sentences.map(({ start, end }) => [start, end])
   });
+  if (saved) rememberPosition();
   renderSentence();
   renderList();
   controls.status.textContent = saved ? "本句已保存" : "本次修改已应用，浏览器未能保存。";
@@ -557,10 +559,27 @@ function playCurrent() {
   playText(range ? sentence.slice(state.tokens[range[0]].start, state.tokens[range[1]].end) : sentence);
 }
 
+function rememberPosition() {
+  saveLocal(localKeys.position, {
+    name: state.scriptName,
+    index: state.current,
+    sentence: state.sentences[state.current].text
+  });
+}
+
+function resumeIndex(sentences, name, position) {
+  if (position?.name !== name || typeof position.sentence !== "string") return 0;
+  if (Number.isInteger(position.index) && sentences[position.index]?.text === position.sentence) {
+    return position.index;
+  }
+  return Math.max(0, sentences.findIndex(sentence => sentence.text === position.sentence));
+}
+
 function selectSentence(index) {
   if (!sentenceEditor.hidden || !state.sentences[index]) return false;
   stopSpeech();
   state.current = index;
+  rememberPosition();
   renderSentence();
   const previous = byId("sentenceList").querySelector('[aria-current="true"]');
   if (previous) previous.removeAttribute("aria-current");
@@ -570,7 +589,7 @@ function selectSentence(index) {
   return true;
 }
 
-function setScript(text, name, sentenceRanges) {
+function setScript(text, name, sentenceRanges, position) {
   const sentences = Array.isArray(sentenceRanges) ? sentenceRanges.map(([start, end]) => ({
     text: text.slice(start, end).replace(/\s+/g, " "), start, end
   })) : splitSentences(text);
@@ -579,7 +598,7 @@ function setScript(text, name, sentenceRanges) {
   state.script = text;
   state.scriptName = name;
   state.sentences = sentences;
-  state.current = 0;
+  state.current = resumeIndex(sentences, name, position);
   byId("scriptInfo").textContent = name + " · " + sentences.length + " 句";
   byId("search").value = "";
   renderSentence();
@@ -718,17 +737,18 @@ byId("importForm").addEventListener("submit", event => {
     importStatus.textContent = "请先填入讲稿。";
     return;
   }
-  saveLocal(localKeys.manuscript, useDefault ? null : { text, name });
+  if (saveLocal(localKeys.manuscript, useDefault ? null : { text, name })) rememberPosition();
   dialog.close();
 });
 
 const saved = loadLocal(localKeys.manuscript);
-if (typeof saved?.text !== "string" || !setScript(saved.text, saved.name || "我的讲稿", saved.sentenceRanges)) {
+const position = loadLocal(localKeys.position);
+if (typeof saved?.text !== "string" || !setScript(saved.text, saved.name || "我的讲稿", saved.sentenceRanges, position)) {
   fetchDefault().then(text => {
-    if (!state.script && !setScript(text, "示例稿")) throw new Error("示例稿为空");
+    if (!state.script && !setScript(text, "示例稿", undefined, position)) throw new Error("示例稿为空");
   }).catch(() => {
     if (!state.script) {
-      setScript(sample, "示例稿");
+      setScript(sample, "示例稿", undefined, position);
       controls.status.textContent = "示例稿暂未加载，可以点「换讲稿」重试。";
     }
   });
