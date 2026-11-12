@@ -1,7 +1,11 @@
 "use strict";
 
 const byId = id => document.getElementById(id);
-const localKeys = { manuscript: "rehearsal.manuscript", settings: "rehearsal.settings" };
+const localKeys = {
+  manuscript: "rehearsal.manuscript",
+  settings: "rehearsal.settings",
+  translationPrefix: "rehearsal.translation.en-zh-CN:"
+};
 const defaultTerms = "FPGA = F P G A\nDDR4 = D D R four\nNVMe = N V M E";
 const sample = "Good morning, everyone. Today I’ll explain how an FPGA processes data. Let’s look at the next slide.";
 const wordPattern = /\p{N}+(?:[.,]\p{N}+)+|[\p{L}\p{N}][\p{L}\p{N}\p{M}]*(?:['’‐‑-][\p{L}\p{N}][\p{L}\p{N}\p{M}]*)*/gu;
@@ -251,18 +255,29 @@ function handleWord(index) {
 }
 
 const translateButton = byId("translate");
+const translationActions = byId("translationActions");
 const translationText = byId("translationText");
 const translations = new Map();
 let translationRequest = null;
+
+function savedTranslation(sentence) {
+  const translation = translations.get(sentence) ?? loadLocal(localKeys.translationPrefix + sentence);
+  return typeof translation === "string" ? translation : "";
+}
+
+function renderTranslation(translation) {
+  translationActions.hidden = Boolean(translation);
+  translationText.textContent = translation;
+  translationText.hidden = !translation;
+  translateButton.setAttribute("aria-expanded", String(Boolean(translation)));
+}
 
 function resetTranslation(sentence) {
   translationRequest?.abort();
   translationRequest = null;
   translateButton.disabled = !sentence;
   translateButton.textContent = "看译文";
-  translateButton.setAttribute("aria-expanded", "false");
-  translationText.hidden = true;
-  translationText.textContent = "";
+  renderTranslation(sentence ? savedTranslation(sentence) : "");
 }
 
 function translationChunks(sentence) {
@@ -315,19 +330,16 @@ async function fetchTranslation(sentence, signal) {
 
 async function showTranslation() {
   const sentence = state.sentences[state.current];
-  if (!sentence) return;
-  if (!translationText.hidden && translations.has(sentence)) {
-    resetTranslation(sentence);
+  if (!sentence || translationRequest) return;
+
+  const cached = savedTranslation(sentence);
+  if (cached) {
+    renderTranslation(cached);
     return;
   }
 
   translationText.hidden = false;
   translateButton.setAttribute("aria-expanded", "true");
-  if (translations.has(sentence)) {
-    translationText.textContent = translations.get(sentence);
-    translateButton.textContent = "隐藏译文";
-    return;
-  }
 
   const request = new AbortController();
   translationRequest = request;
@@ -338,8 +350,8 @@ async function showTranslation() {
     const translation = await fetchTranslation(sentence, request.signal);
     if (translationRequest !== request) return;
     translations.set(sentence, translation);
-    translationText.textContent = translation;
-    translateButton.textContent = "隐藏译文";
+    saveLocal(localKeys.translationPrefix + sentence, translation);
+    renderTranslation(translation);
   } catch (error) {
     if (translationRequest !== request) return;
     translationText.textContent = request.signal.aborted ? "翻译超时，请重试。" :
