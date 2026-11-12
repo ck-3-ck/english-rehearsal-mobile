@@ -4,6 +4,7 @@ const byId = id => document.getElementById(id);
 const localKeys = {
   manuscript: "rehearsal.manuscript",
   settings: "rehearsal.settings",
+  wordClicks: "rehearsal.wordClicks",
   translationPrefix: "rehearsal.translation.en-zh-CN:"
 };
 const defaultTerms = "FPGA = F P G A\nDDR4 = D D R four\nNVMe = N V M E";
@@ -11,7 +12,7 @@ const sample = "Good morning, everyone. Today I’ll explain how an FPGA process
 const wordPattern = /\p{N}+(?:[.,]\p{N}+)+|[\p{L}\p{N}][\p{L}\p{N}\p{M}]*(?:['’‐‑-][\p{L}\p{N}][\p{L}\p{N}\p{M}]*)*/gu;
 const state = {
   script: "", sentences: [], current: 0, tokens: [], rangeMode: false,
-  rangeStart: null, rangeEnd: null, ipaRequest: 0, playback: null, voices: []
+  rangeStart: null, rangeEnd: null, playback: null, voices: []
 };
 const speech = window.speechSynthesis;
 const canSpeak = Boolean(speech && window.SpeechSynthesisUtterance);
@@ -20,7 +21,7 @@ const outline = byId("outline");
 const dialog = byId("importDialog");
 const controls = {
   position: byId("position"), sentence: byId("sentence"), range: byId("rangeMode"),
-  pronunciation: byId("pronunciation"), tip: byId("tip"), status: byId("status"),
+  tip: byId("tip"), status: byId("status"),
   play: byId("play"), stop: byId("stop"), previous: byId("previous"), next: byId("next"),
   voice: byId("voice"), repeat: byId("repeat"), delay: byId("delay")
 };
@@ -126,21 +127,24 @@ function findIpa(dictionary, word) {
   return readings.every(Boolean) ? readings.join("  ") : null;
 }
 
+const sentenceIpa = { panel: byId("pronunciation"), word: byId("ipaWord"), text: byId("ipaText"), request: 0 };
+const memoryIpa = { panel: byId("memoryIpa"), word: byId("memoryIpaWord"), text: byId("memoryIpaText"), request: 0 };
+
 function hideIpa() {
-  state.ipaRequest += 1;
-  controls.pronunciation.hidden = true;
+  sentenceIpa.request += 1;
+  sentenceIpa.panel.hidden = true;
 }
 
-function showIpa(word) {
-  const request = ++state.ipaRequest;
-  controls.pronunciation.hidden = false;
-  byId("ipaWord").textContent = word + " · 美式 IPA";
-  byId("ipaText").textContent = "查找音标…";
+function showIpa(word, view = sentenceIpa) {
+  const request = ++view.request;
+  view.panel.hidden = false;
+  view.word.textContent = word + " · 美式 IPA";
+  view.text.textContent = "查找音标…";
   loadDictionary().then(dictionary => {
-    if (request !== state.ipaRequest) return;
-    byId("ipaText").textContent = findIpa(dictionary, word) || "词表未收录此词的音标";
+    if (request !== view.request) return;
+    view.text.textContent = findIpa(dictionary, word) || "词表未收录此词的音标";
   }).catch(() => {
-    if (request === state.ipaRequest) byId("ipaText").textContent = "词表暂未加载成功，请再点一次。";
+    if (request === view.request) view.text.textContent = "词表暂未加载成功，请再点一次。";
   });
 }
 
@@ -236,12 +240,55 @@ function refreshRange() {
   byId("playLabel").textContent = range ? "听选段" : "听整句";
 }
 
+const wordClicks = new Map(Object.entries(loadLocal(localKeys.wordClicks) ?? {}));
+
+function renderWordMemory() {
+  const repeated = [...wordClicks.values()].filter(entry => entry.count >= 2)
+    .sort((a, b) => b.count - a.count || a.word.localeCompare(b.word, "en"));
+  const fragment = document.createDocumentFragment();
+  for (const entry of repeated) {
+    const item = document.createElement("li");
+    const button = document.createElement("button");
+    button.type = "button";
+    const word = document.createElement("span");
+    word.className = "sentence-title";
+    word.lang = "en";
+    word.textContent = entry.word;
+    const count = document.createElement("span");
+    count.className = "subtle";
+    count.textContent = entry.count + " 次";
+    button.append(word, count);
+    button.addEventListener("click", () => {
+      playText(entry.word, entry.word);
+      showIpa(entry.word, memoryIpa);
+    });
+    item.append(button);
+    fragment.append(item);
+  }
+  byId("memoryCount").textContent = repeated.length + " 个词";
+  byId("memoryEmpty").hidden = repeated.length > 0;
+  byId("memoryList").replaceChildren(fragment);
+}
+
+function rememberWordClick(word) {
+  if (!/\p{L}/u.test(word)) return;
+  for (const [key, saved] of Object.entries(loadLocal(localKeys.wordClicks) ?? {})) {
+    if (saved.count > (wordClicks.get(key)?.count ?? 0)) wordClicks.set(key, saved);
+  }
+  const key = normalize(word);
+  const entry = wordClicks.get(key);
+  wordClicks.set(key, { word: entry?.word ?? word, count: (entry?.count ?? 0) + 1 });
+  saveLocal(localKeys.wordClicks, Object.fromEntries(wordClicks));
+  renderWordMemory();
+}
+
 function handleWord(index) {
   if (!state.rangeMode) {
     state.tokens.forEach((token, i) => token.button.classList.toggle("is-selected", i === index));
     const word = state.tokens[index].word;
     playText(word, word);
     showIpa(word);
+    rememberWordClick(word);
     return;
   }
   stopSpeech();
@@ -512,6 +559,7 @@ byId("saveTerms").addEventListener("click", () => {
   } catch (error) { byId("termsStatus").textContent = error.message; }
 });
 
+renderWordMemory();
 outline.open = !phoneLayout.matches;
 updateVoices();
 if (canSpeak) speech.addEventListener("voiceschanged", updateVoices);

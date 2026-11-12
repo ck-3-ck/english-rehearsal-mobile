@@ -7,8 +7,8 @@
   <meta name="description" content="在手机上逐句听英文讲稿，点词试听并查看美式音标。">
   <title>英文逐句跟读</title>
   <link rel="apple-touch-icon" href="touch-icon.png">
-  <link rel="stylesheet" href="style.css?v=translation">
-  <script src="app.js?v=saved-translations" defer></script>
+  <link rel="stylesheet" href="style.css?v=word-memory">
+  <script src="app.js?v=word-memory" defer></script>
 </head>
 <body>
   <div class="workspace">
@@ -64,6 +64,16 @@
               <label><input type="radio" name="speed" value="0.6"><span>更慢</span></label>
             </div>
           </fieldset>
+
+          <details class="settings word-memory">
+            <summary>单词记忆库 <span id="memoryCount" class="subtle"></span></summary>
+            <p id="memoryEmpty" class="subtle memory-empty">在讲稿里点同一个词两次，就会自动收录。</p>
+            <div id="memoryIpa" class="pronunciation" aria-live="polite" hidden>
+              <div id="memoryIpaWord" class="ipa-word"></div>
+              <div id="memoryIpaText" class="ipa-text"></div>
+            </div>
+            <ul id="memoryList" class="sentence-list memory-list" aria-label="已收录的单词"></ul>
+          </details>
 
           <details class="settings">
             <summary>音色、复读和术语</summary>
