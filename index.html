@@ -7,8 +7,8 @@
   <meta name="description" content="在手机上逐句听英文讲稿，点词试听并查看美式音标。">
   <title>英文逐句跟读</title>
   <link rel="apple-touch-icon" href="touch-icon.png">
-  <link rel="stylesheet" href="style.css?v=word-memory">
-  <script src="app.js?v=word-memory" defer></script>
+  <link rel="stylesheet" href="style.css?v=sentence-edit">
+  <script src="app.js?v=sentence-edit" defer></script>
 </head>
 <body>
   <div class="workspace">
@@ -25,21 +25,35 @@
         <div class="reading">
           <div class="reading-head">
             <span id="position" class="position">当前句</span>
-            <button id="rangeMode" class="text-button" type="button" aria-pressed="false" disabled>选段</button>
-          </div>
-          <div id="sentence" class="sentence" lang="en"></div>
-          <p id="tip" class="reading-tip">轻点单词可听发音、看音标</p>
-          <div id="pronunciation" class="pronunciation" aria-live="polite" hidden>
-            <div id="ipaWord" class="ipa-word"></div>
-            <div id="ipaText" class="ipa-text"></div>
-          </div>
-          <div class="translation">
-            <div id="translationActions" class="translation-actions">
-              <button id="translate" class="text-button" type="button" aria-controls="translationText" aria-expanded="false" disabled>看译文</button>
-              <span class="subtle">点按后发送当前句给 MyMemory</span>
+            <div class="reading-actions">
+              <button id="rangeMode" class="text-button" type="button" aria-pressed="false" disabled>选段</button>
+              <button id="editSentence" class="text-button" type="button" aria-controls="sentenceEditor" disabled>修改本句</button>
             </div>
-            <p id="translationText" class="translation-text" role="status" hidden></p>
           </div>
+          <div id="sentencePreview">
+            <div id="sentence" class="sentence" lang="en"></div>
+            <p id="tip" class="reading-tip">轻点单词可听发音、看音标</p>
+            <div id="pronunciation" class="pronunciation" aria-live="polite" hidden>
+              <div id="ipaWord" class="ipa-word"></div>
+              <div id="ipaText" class="ipa-text"></div>
+            </div>
+            <div class="translation">
+              <div id="translationActions" class="translation-actions">
+                <button id="translate" class="text-button" type="button" aria-controls="translationText" aria-expanded="false" disabled>看译文</button>
+                <span class="subtle">点按后发送当前句给 MyMemory</span>
+              </div>
+              <p id="translationText" class="translation-text" role="status" hidden></p>
+            </div>
+          </div>
+          <form id="sentenceEditor" class="sentence-editor" hidden>
+            <label class="sr-only" for="sentenceDraft">修改当前英文句子</label>
+            <textarea id="sentenceDraft" lang="en" rows="3" spellcheck="false" aria-describedby="sentenceEditError"></textarea>
+            <p id="sentenceEditError" class="subtle" role="status"></p>
+            <div class="dialog-actions">
+              <button id="cancelSentenceEdit" class="button" type="button">取消</button>
+              <button class="button primary" type="submit">保存本句</button>
+            </div>
+          </form>
         </div>
 
         <div class="controls">

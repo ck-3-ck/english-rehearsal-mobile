@@ -11,7 +11,7 @@ const defaultTerms = "FPGA = F P G A\nDDR4 = D D R four\nNVMe = N V M E";
 const sample = "Good morning, everyone. Today I’ll explain how an FPGA processes data. Let’s look at the next slide.";
 const wordPattern = /\p{N}+(?:[.,]\p{N}+)+|[\p{L}\p{N}][\p{L}\p{N}\p{M}]*(?:['’‐‑-][\p{L}\p{N}][\p{L}\p{N}\p{M}]*)*/gu;
 const state = {
-  script: "", sentences: [], current: 0, tokens: [], rangeMode: false,
+  script: "", scriptName: "", sentences: [], current: 0, tokens: [], rangeMode: false,
   rangeStart: null, rangeEnd: null, playback: null, voices: []
 };
 const speech = window.speechSynthesis;
@@ -35,8 +35,10 @@ function saveLocal(key, value) {
   try {
     if (value === null) localStorage.removeItem(key);
     else localStorage.setItem(key, JSON.stringify(value));
+    return true;
   } catch {
     // The current session remains usable if browser storage is unavailable.
+    return false;
   }
 }
 
@@ -44,19 +46,31 @@ function splitSentences(text) {
   const abbreviations = /\b(?:Mr|Mrs|Ms|Dr|Prof|Fig|Figs|Eq|Eqs|Sec|Ch|vs|approx|e\.g|i\.e)\.$/i;
   const initials = /(?:^|\s)(?:[A-Z]\.)+$/;
   const sentences = [];
-  for (const raw of text.replace(/\r\n?/g, "\n").split(/\n[ \t]*\n+/)) {
-    const paragraph = raw.replace(/\s+/g, " ").trim();
+  const parts = text.split(/((?:\r\n|\r(?!\n)|\n)[ \t]*(?:\r\n|\r(?!\n)|\n)+)/);
+  let offset = 0;
+  for (let index = 0; index < parts.length; index += 2) {
+    const raw = parts[index];
+    const paragraph = raw.trim();
+    const paragraphStart = offset + raw.length - raw.trimStart().length;
+    offset += raw.length + (parts[index + 1]?.length ?? 0);
     let start = 0;
+    const addSentence = end => {
+      const rawSentence = paragraph.slice(start, end);
+      const trimmed = rawSentence.trim();
+      if (trimmed) {
+        const from = paragraphStart + start + rawSentence.length - rawSentence.trimStart().length;
+        sentences.push({ text: trimmed.replace(/\s+/g, " "), start: from, end: from + trimmed.length });
+      }
+      start = end;
+    };
     for (const mark of paragraph.matchAll(/[.!?]+["”’')\]]*(?=\s|$)/g)) {
       const end = mark.index + mark[0].length;
       const sentence = paragraph.slice(start, end).trim();
       if (end < paragraph.length && mark[0] === "." &&
           (abbreviations.test(sentence) || initials.test(sentence))) continue;
-      if (sentence) sentences.push(sentence);
-      start = end;
+      addSentence(end);
     }
-    const remaining = paragraph.slice(start).trim();
-    if (remaining) sentences.push(remaining);
+    addSentence(paragraph.length);
   }
   return sentences;
 }
@@ -376,7 +390,7 @@ async function fetchTranslation(sentence, signal) {
 }
 
 async function showTranslation() {
-  const sentence = state.sentences[state.current];
+  const sentence = state.sentences[state.current]?.text;
   if (!sentence || translationRequest) return;
 
   const cached = savedTranslation(sentence);
@@ -413,8 +427,69 @@ async function showTranslation() {
   }
 }
 
+const editSentenceButton = byId("editSentence");
+const sentenceEditor = byId("sentenceEditor");
+const sentenceDraft = byId("sentenceDraft");
+
+function openSentenceEditor() {
+  const sentence = state.sentences[state.current];
+  if (!sentence) return;
+  stopSpeech();
+  sentenceDraft.value = state.script.slice(sentence.start, sentence.end);
+  byId("sentenceEditError").textContent = "";
+  byId("sentencePreview").hidden = true;
+  sentenceEditor.hidden = false;
+  editSentenceButton.disabled = true;
+  controls.range.disabled = true;
+  controls.play.disabled = true;
+  controls.previous.disabled = true;
+  controls.next.disabled = true;
+  byId("openImport").disabled = true;
+  sentenceDraft.focus();
+}
+
+function saveSentenceEdit(event) {
+  event.preventDefault();
+  const replacement = sentenceDraft.value.trim();
+  if (!replacement) {
+    byId("sentenceEditError").textContent = "请输入修改后的句子。";
+    sentenceDraft.focus();
+    return;
+  }
+
+  const sentence = state.sentences[state.current];
+  const original = state.script.slice(sentence.start, sentence.end).replace(/\r\n?/g, "\n");
+  if (replacement === original) {
+    renderSentence();
+    editSentenceButton.focus();
+    return;
+  }
+  const delta = replacement.length - (sentence.end - sentence.start);
+  state.script = state.script.slice(0, sentence.start) + replacement + state.script.slice(sentence.end);
+  sentence.text = replacement.replace(/\s+/g, " ");
+  sentence.end = sentence.start + replacement.length;
+  for (const later of state.sentences.slice(state.current + 1)) {
+    later.start += delta;
+    later.end += delta;
+  }
+
+  const saved = saveLocal(localKeys.manuscript, {
+    text: state.script,
+    name: state.scriptName,
+    sentenceRanges: state.sentences.map(({ start, end }) => [start, end])
+  });
+  renderSentence();
+  renderList();
+  controls.status.textContent = saved ? "本句已保存" : "本次修改已应用，浏览器未能保存。";
+  editSentenceButton.focus();
+}
+
 function renderSentence() {
-  const sentence = state.sentences[state.current] || "";
+  const sentence = state.sentences[state.current]?.text || "";
+  sentenceEditor.hidden = true;
+  byId("sentencePreview").hidden = false;
+  byId("openImport").disabled = false;
+  editSentenceButton.disabled = !sentence;
   hideIpa();
   resetTranslation(sentence);
   state.rangeMode = false;
@@ -449,7 +524,7 @@ function renderSentence() {
 function renderList() {
   const query = byId("search").value.trim().toLowerCase();
   const fragment = document.createDocumentFragment();
-  state.sentences.forEach((sentence, index) => {
+  state.sentences.forEach(({ text: sentence }, index) => {
     if (query && !sentence.toLowerCase().includes(query)) return;
     const item = document.createElement("li");
     const button = document.createElement("button");
@@ -477,13 +552,13 @@ function renderList() {
 }
 
 function playCurrent() {
-  const sentence = state.sentences[state.current] || "";
+  const sentence = state.sentences[state.current]?.text || "";
   const range = selectionRange();
   playText(range ? sentence.slice(state.tokens[range[0]].start, state.tokens[range[1]].end) : sentence);
 }
 
 function selectSentence(index) {
-  if (!state.sentences[index]) return;
+  if (!sentenceEditor.hidden || !state.sentences[index]) return false;
   stopSpeech();
   state.current = index;
   renderSentence();
@@ -492,13 +567,17 @@ function selectSentence(index) {
   const active = byId("sentenceList").querySelector('[data-index="' + index + '"]');
   if (active) active.setAttribute("aria-current", "true");
   playCurrent();
+  return true;
 }
 
-function setScript(text, name) {
-  const sentences = splitSentences(text);
+function setScript(text, name, sentenceRanges) {
+  const sentences = Array.isArray(sentenceRanges) ? sentenceRanges.map(([start, end]) => ({
+    text: text.slice(start, end).replace(/\s+/g, " "), start, end
+  })) : splitSentences(text);
   if (!sentences.length) return false;
   stopSpeech();
   state.script = text;
+  state.scriptName = name;
   state.sentences = sentences;
   state.current = 0;
   byId("scriptInfo").textContent = name + " · " + sentences.length + " 句";
@@ -564,6 +643,12 @@ outline.open = !phoneLayout.matches;
 updateVoices();
 if (canSpeak) speech.addEventListener("voiceschanged", updateVoices);
 controls.play.addEventListener("click", playCurrent);
+editSentenceButton.addEventListener("click", openSentenceEditor);
+sentenceEditor.addEventListener("submit", saveSentenceEdit);
+byId("cancelSentenceEdit").addEventListener("click", () => {
+  renderSentence();
+  editSentenceButton.focus();
+});
 translateButton.addEventListener("click", showTranslation);
 controls.stop.addEventListener("click", () => stopSpeech("已停止"));
 controls.previous.addEventListener("click", () => selectSentence(state.current - 1));
@@ -579,7 +664,7 @@ byId("search").addEventListener("input", renderList);
 byId("sentenceList").addEventListener("click", event => {
   const target = event.target.closest("button[data-index]");
   if (!target) return;
-  selectSentence(Number(target.dataset.index));
+  if (!selectSentence(Number(target.dataset.index))) return;
   if (phoneLayout.matches) {
     outline.open = false;
     controls.position.scrollIntoView({ block: "start" });
@@ -638,7 +723,7 @@ byId("importForm").addEventListener("submit", event => {
 });
 
 const saved = loadLocal(localKeys.manuscript);
-if (typeof saved?.text !== "string" || !setScript(saved.text, saved.name || "我的讲稿")) {
+if (typeof saved?.text !== "string" || !setScript(saved.text, saved.name || "我的讲稿", saved.sentenceRanges)) {
   fetchDefault().then(text => {
     if (!state.script && !setScript(text, "示例稿")) throw new Error("示例稿为空");
   }).catch(() => {
